@@ -33,7 +33,6 @@ decode = lambda l: ''.join([itos[i] for i in l])
 
 # encode the text and wrap it into data tensor
 data = torch.tensor(encode(text), dtype=torch.long)
-print(data[:100])
 
 # train-test split
 n = int(0.9 * len(data)) # 90%
@@ -72,13 +71,56 @@ class BigramLanguageModel(nn.Module):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
 
-    def forward(self, idx, targets):
-        logits = self.token_embedding_table(idx)
-        return logits
 
+    def forward(self, idx, targets=None):
+        logits = self.token_embedding_table(idx) # batch by time by channel
 
+        if targets is None:
+            loss = None
+        else:
+            # reshape
+            B, T, C = logits.shape
+            logits = logits.view(B*T, C)
 
+            targets = targets.view(B*T)
+            loss = F.cross_entropy(logits, targets) # Negative Log Likelihood
+        return logits, loss
 
+    def generate(self, idx, max_new_tokens):
+        # idx = (B, T)
+        for _ in range(max_new_tokens):
+            logits, loss = self(idx) # predictions
+            logits = logits[:, -1, :]  # -> (B, C)
 
+            # apply softmax to get probabilities
+            probs = F.softmax(logits, dim=-1)  # (B, C)
 
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
 
+            # append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
+        return idx
+
+vocab_size = len(chars)
+# xb, yb = get_batch('train')
+
+m = BigramLanguageModel(vocab_size)
+# logits, loss = m(xb, yb)
+# output = decode(m.generate(idx=torch.zeros((1,1), dtype=torch.long), max_new_tokens=100)[0].tolist())
+# print(output)
+
+# create optimizer
+optimizer = torch.optim.Adam(m.parameters(), lr=1e-3)
+
+batch_size = 32
+for steps in range(10000):
+    xb, yb = get_batch('train')
+    logits, loss = m(xb, yb)
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
+
+print(loss.item())
+output = decode(m.generate(idx=torch.zeros((1,1), dtype=torch.long), max_new_tokens=100)[0].tolist())
+print(output)

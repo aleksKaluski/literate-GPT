@@ -357,5 +357,6 @@ pyrightconfig.json
 
 # ignore txt
 *.txt
+/data
 
 # End of https://www.toptal.com/developers/gitignore/api/pycharm+all,jupyternotebooks,python,pycharm

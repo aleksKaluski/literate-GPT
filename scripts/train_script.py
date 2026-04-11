@@ -14,22 +14,24 @@ if current_dir[-4:-1] != 'data':
 print(f"\nCurrent working directory: {os.getcwd()}")
 
 # load the data
-with open("data/swans_way_complete.txt", "r", encoding="utf-8") as f:
+with open("data/lecture_on_ethics.txt", "r", encoding="utf-8") as f:
     lines = f.readlines()
-    text = "".join(lines[100:-200])
+    # text = "".join(lines[100:-200])
+    text = "".join(lines)
 
 text = text.replace("\n", " ")
 allowed_chars = string.ascii_letters + string.digits + string.punctuation + " "
 delete_dict = {ord(c): None for c in text if c not in allowed_chars}
 text = text.translate(delete_dict)
+# print(text[:100])
 
 # define hyperparams
 ######################################
 torch.manual_seed(42)
-batch_size = 64 # how many independent sequences will we process in parallel?
-block_size = 128
+batch_size = 16 # how many independent sequences will we process in parallel?
+block_size = 32
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-n_embed = 128
+n_embed = 64
 n_head = 6
 n_layer = 6
 
@@ -37,7 +39,7 @@ dropout = 0.2
 
 max_iters = 5000
 eval_interval = 300
-learning_rate = 3e-3
+learning_rate = 2e-3
 eval_iters = 200
 
 # all characters
@@ -61,6 +63,10 @@ data = torch.tensor(encode(text), dtype=torch.long)
 n = int(0.9 * len(data)) # 90%
 train_data = data[:n]
 test_data = data[n:]
+
+print("train len:", len(train_data), "val len:", len(test_data), "block_size:", block_size)
+print("vocab_size:", vocab_size)
+print("n_embd:", n_embed, "n_head:", n_head, "head_size:", n_embed // n_head)
 ######################################
 
 
@@ -85,6 +91,7 @@ def get_batch(split):
 
 @torch.no_grad()
 def estimate_loss():
+
     out = {}
     model.eval()
     for split in ['train', 'val']:
@@ -138,7 +145,7 @@ class MultiHeadAttention(nn.Module):
 
         # projection for residual connections
         self.proj = nn.Linear(n_heads * head_size, n_embed)
-        nn.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         # projection is a linear transformation of the outcome of
@@ -192,7 +199,7 @@ class GPTLanguageModel(nn.Module):
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
 
         # token position encoding
-        self.position_embedding_table = nn.Embedding(vocab_size, n_embed)
+        self.position_embedding_table = nn.Embedding(block_size, n_embed)
 
         # initialize block
         self.blocks = nn.Sequential(*[Block(n_embed, n_heads=n_head) for _ in range(n_layer)])
@@ -212,6 +219,7 @@ class GPTLanguageModel(nn.Module):
 
 
     def forward(self, idx, targets=None):
+
         B, T = idx.shape
         # position embdeding
         pos_emd = self.position_embedding_table(torch.arange(T).to(device=device)) # -> (T, C)
@@ -220,7 +228,7 @@ class GPTLanguageModel(nn.Module):
         # we add token embeddings and position emeddings
         x = tok_emb + pos_emd
         x = self.blocks(x) # feed the into to self-attention head
-        x = self.ffwd(x) # feedforward after self-attention
+        # x = self.ffwd(x) # feedforward after self-attention
         logits = self.lm_head(x) # B, T, C (vocac size C)
 
         if targets is None:

@@ -27,14 +27,17 @@ text = text.translate(delete_dict)
 ######################################
 torch.manual_seed(42)
 batch_size = 64 # how many independent sequences will we process in parallel?
-block_size = 8
+block_size = 128
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-n_embed = 32
+n_embed = 128
+n_head = 6
+n_layer = 6
+
 dropout = 0.2
 
 max_iters = 5000
 eval_interval = 300
-learning_rate = 1e-3
+learning_rate = 3e-3
 eval_iters = 200
 
 # all characters
@@ -133,8 +136,16 @@ class MultiHeadAttention(nn.Module):
         super().__init__()
         self.n_heads = nn.ModuleList([Head(head_size) for _ in range(n_heads)])
 
+        # projection for residual connections
+        self.proj = nn.Linear(n_heads * head_size, n_embed)
+        nn.dropout = nn.Dropout(dropout)
+
     def forward(self, x):
-        return torch.cat([h(x) for h in self.n_heads], dim=-1)
+        # projection is a linear transformation of the outcome of
+        # this layer
+        out = torch.cat([h(x) for h in self.n_heads], dim=-1)
+        out = self.dropout(self.proj(out))
+        return out
 
 
 class FeedForward(nn.Module):
@@ -142,7 +153,12 @@ class FeedForward(nn.Module):
         super().__init__()
 
         # a very simple layer: linear MLP followed by a ReLU activation
-        self.net = nn.Sequential(nn.Linear(n_embed, n_embed), nn.ReLU())
+        self.net = nn.Sequential(nn.Linear(n_embed, n_embed),
+                                 nn.ReLU(),
+                                 nn.Linear(n_embed, n_embed), # projection layer going back to the
+                                 # residual pathway
+                                 nn.Dropout(dropout)
+                                 )
 
     def forward(self, x):
         return self.net(x)
@@ -154,12 +170,17 @@ class Block(nn.Module):
         self.sa = MultiHeadAttention(n_heads, head_size)
         self.ffwd = FeedForward(n_embed)
 
+        # layer normalization
+        self.ln1 = nn.LayerNorm(n_embed)
+        self.ln2 = nn.LayerNorm(n_embed)
+
     def forward(self, x):
-        x = self.sa(x)
-        x = self.ffwd(x)
+        # by adding x we introduce the residual connections
+        x = x + self.sa(self.ln1(x))
+        x = x + self.ffwd(self.ln2(x))
         return x
 
-class BigramLanguageModel(nn.Module):
+class GPTLanguageModel(nn.Module):
     """
     Define a bigram language model, which a simple NN. Essentially it is a massive scoreboard where
     every word is a word and every column is it's possible successor.
@@ -173,13 +194,21 @@ class BigramLanguageModel(nn.Module):
         # token position encoding
         self.position_embedding_table = nn.Embedding(vocab_size, n_embed)
 
+        # initialize block
+        self.blocks = nn.Sequential(*[Block(n_embed, n_heads=n_head) for _ in range(n_layer)])
+
+        # self-attention head (hanged with blocks)
+        # self.sa_heads = MultiHeadAttention(4, n_embed//4) #we have 4 communication channels
+        # self.ffwd = FeedForward(n_embed)
+
+        self.ln_f = nn.LayerNorm(n_embed)  # final layer norm
+
         # self-attention head
-        self.sa_heads = MultiHeadAttention(4, n_embed//4) #we have 4 communication channels
-        self.ffwd = FeedForward(n_embed)
         self.lm_head = nn.Linear(n_embed, vocab_size) # language modeling head
 
+
         # token position encoding
-        self.position_embedding_table = nn.Embedding(vocab_size, n_embed)
+        # self.position_embedding_table = nn.Embedding(vocab_size, n_embed)
 
 
     def forward(self, idx, targets=None):
@@ -190,7 +219,7 @@ class BigramLanguageModel(nn.Module):
 
         # we add token embeddings and position emeddings
         x = tok_emb + pos_emd
-        x = self.sa_heads(x) # feed the into to self-attention head
+        x = self.blocks(x) # feed the into to self-attention head
         x = self.ffwd(x) # feedforward after self-attention
         logits = self.lm_head(x) # B, T, C (vocac size C)
 
@@ -226,7 +255,7 @@ class BigramLanguageModel(nn.Module):
         return idx
 
 vocab_size = len(chars)
-model = BigramLanguageModel()
+model = GPTLanguageModel()
 m = model.to(device)
 
 # create optimizer

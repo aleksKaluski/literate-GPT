@@ -139,3 +139,52 @@ class MultiHeadAttention(nn.Module):
         out = torch.cat([h(x) for h in self.n_heads], dim=-1)
         out = self.dropout(self.proj(out))
         return out # (B, T, C)
+
+
+class FeedForward(nn.Module):
+    """
+    A very simple linear MLP with ReLu activation function.
+    """
+    def __init__(self, n_embed: int, dropout: float):
+        """
+        Initialize a simple feed-forward layer.
+        :param n_embed: number of embedding dimensions on which feed-forward layer is applied
+        :param dropout: how much dropout we want to use
+        """
+        super().__init__()
+        self.net = nn.Sequential(nn.Linear(n_embed, n_embed),
+                                 nn.ReLU(),
+                                 # projection layer going back to the
+                                 # residual pathway
+                                 nn.Linear(n_embed, n_embed),
+                                 nn.Dropout(dropout)
+                                 )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class Block(nn.Module):
+    """
+    Initialize the block of attention mechanism with normalization layers.
+    """
+    def __init__(self, n_embed: int, n_heads: int):
+        """
+        A single block of attention.
+        :param n_embed: number of embedding dimensions on which attention mechanism is applied
+        :param n_heads: number of attention heads to initialize
+        """
+        super().__init__()
+        head_size = n_embed // n_heads
+        self.sa = MultiHeadAttention(n_heads, head_size)
+        self.ffwd = FeedForward(n_embed)
+
+        # normalization
+        self.ln1 = nn.LayerNorm(n_embed)
+        self.ln2 = nn.LayerNorm(n_embed)
+
+    def forward(self, x):
+        # by adding x we introduce the residual connections
+        x = x + self.sa(self.ln1(x))
+        x = x + self.ffwd(self.ln2(x))
+        return x

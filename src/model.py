@@ -82,7 +82,7 @@ class Head(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
 
-    def forward(self, x: torch.long) ->torch.Tensor:
+    def forward(self, x: torch.Tensor) ->torch.Tensor:
         """
         The way in which the attention mechanism is applied (defines the computational graph).
         :param x: the input sequence of token embeddings for the attention head
@@ -112,7 +112,7 @@ class MultiHeadAttention(nn.Module):
     """
     Initialize the multi-head attention mechanism.
     """
-    def __init__(self, head_size: int, n_embed: int, n_heads: int , dropout: float):
+    def __init__(self, head_size: int, n_embed: int, n_heads: int, block_size:int, dropout: float=0.2):
         """
         Initialize the multi-head attention mechanism.
         :param head_size: size of attention heads
@@ -121,14 +121,17 @@ class MultiHeadAttention(nn.Module):
         :param dropout: how much dropout we want to use (meaning: how many activations we want to randomly zero)
         """
         super().__init__()
-        self.n_heads = nn.ModuleList([Head(head_size) for _ in range(n_heads)])
+        self.n_heads = nn.ModuleList([Head(head_size=head_size,
+                                           n_embed=n_embed,
+                                           block_size=block_size,
+                                           dropout=dropout) for _ in range(n_heads)])
 
         # projection for residual connections
         self.proj = nn.Linear(n_heads * head_size, n_embed)
         self.dropout = nn.Dropout(dropout)
 
 
-    def forward(self, x:  torch.long) -> torch.Tensor:
+    def forward(self, x:  torch.Tensor) -> torch.Tensor:
         """
         Use projection layer to mix the information from all individual heads.
         :param x:
@@ -145,7 +148,7 @@ class FeedForward(nn.Module):
     """
     A very simple linear MLP with ReLu activation function.
     """
-    def __init__(self, n_embed: int, dropout: float):
+    def __init__(self, n_embed: int, dropout: float=0.2):
         """
         Initialize a simple feed-forward layer.
         :param n_embed: number of embedding dimensions on which feed-forward layer is applied
@@ -168,7 +171,7 @@ class Block(nn.Module):
     """
     Initialize the block of attention mechanism with normalization layers.
     """
-    def __init__(self, n_embed: int, n_heads: int):
+    def __init__(self, n_embed: int, block_size:int, n_heads: int):
         """
         A single block of attention.
         :param n_embed: number of embedding dimensions on which attention mechanism is applied
@@ -176,7 +179,11 @@ class Block(nn.Module):
         """
         super().__init__()
         head_size = n_embed // n_heads
-        self.sa = MultiHeadAttention(n_heads, head_size)
+        self.sa = MultiHeadAttention(head_size=head_size,
+                                     n_embed=n_embed,
+                                     n_heads=n_heads,
+                                     block_size=block_size)
+
         self.ffwd = FeedForward(n_embed)
 
         # normalization
@@ -188,3 +195,79 @@ class Block(nn.Module):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
+
+
+    class GPTLanguageModel(nn.Module):
+        """
+        Define a bigram language model, which a simple NN. Essentially it is a massive scoreboard where
+        every word is a word and every column is it's possible successor.
+        """
+        def __init__(self, vocab_size: int, block_size: int, n_heads:int, n_layer: int, n_embed: int):
+            """
+            Initialize GPT language model.
+            :param vocab_size: size of vocabulary
+            :param block_size: size of blocks
+            :param n_heads: number of attention heads to initialize
+            :param n_layer: number of layers
+            :param n_embed: number of embedding dimensions on which attention mechanism is applied
+            """
+            super().__init__()
+
+            # token identity encoding
+            self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
+
+            # token position encoding
+            self.position_embedding_table = nn.Embedding(block_size, n_embed)
+
+            # initialize blocks of attention
+            self.blocks = nn.Sequential(*[Block(n_embed, n_heads=n_heads) for _ in range(n_layer)])
+
+            self.ln_f = nn.LayerNorm(n_embed)  # final layer norm
+
+            self.lm_head = nn.Linear(n_embed, vocab_size)  # language modeling head
+
+
+        def forward(self, idx, device: str = 'cpu', targets=None):
+            B, T = idx.shape
+
+            # position embeddings
+            pos_emd = self.position_embedding_table(torch.arange(T).to(device=device))  # -> (T, C)
+
+            # token embeddings
+            tok_emb = self.token_embedding_table(idx)  # B, T, C (embed C)
+
+            # add token embeddings and position embeddings
+            x = tok_emb + pos_emd
+            x = self.blocks(x)  # feed the into to self-attention head
+            # x = self.ffwd(x) # feedforward after self-attention
+            logits = self.lm_head(x)  # B, T, C (vocab size C)
+
+            if targets is None:
+                loss = None
+            else:
+                # reshape
+                B, T, C = logits.shape
+                logits = logits.view(B * T, C)
+
+                targets = targets.view(B * T)
+                loss = F.cross_entropy(logits, targets)  # Negative Log Likelihood
+            return logits, loss
+
+
+        def generate(self, idx, block_size: int, max_new_tokens: int):
+            for _ in range(max_new_tokens):
+                # crop the size to block size
+                idx_cond = idx[:, -block_size:]
+                logits, loss = self(idx_cond)  # predictions
+                logits = logits[:, -1, :]  # -> (B, C)
+
+                # apply softmax to get probabilities
+                probs = F.softmax(logits, dim=-1)  # (B, C)
+
+                # sample from the distribution
+                idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
+
+                # append sampled index to the running sequence
+                idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
+            return idx
+

@@ -1,6 +1,6 @@
 from src import model as md
+from src import data_preprocessing as dp
 import os
-import string
 import torch
 
 
@@ -9,16 +9,7 @@ print(f"\nCurrent working directory: {os.getcwd()}")
 
 #########################################################################################
 # load the data
-with open(r"data/mock_data.txt", "r", encoding="utf-8") as f:
-    lines = f.readlines()
-    # text = "".join(lines[100:-200])
-    text = "".join(lines)
-
-# delete non-ACII characters
-text = text.replace("\n", " ")
-allowed_chars = string.ascii_letters + string.digits + string.punctuation + " "
-delete_dict = {ord(c): None for c in text if c not in allowed_chars}
-text = text.translate(delete_dict)
+text = dp.preprocess_data(path_to_file=r'data/mock_data.txt')
 
 #########################################################################################
 # encode and decode chars

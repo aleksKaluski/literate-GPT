@@ -1,17 +1,15 @@
 """
 Here we keep the core architecture of the GPT model.
 """
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
 
 def get_batch(split: str,
-              block_size: int,
-              batch_size: int,
-              train_data: torch.long,
-              test_data: torch.long) -> torch.utils.data.DataLoader:
+              train_data: torch.Tensor,
+              test_data: torch.Tensor,
+              **kwargs) -> torch.utils.data.DataLoader:
     """
     Generate a batch of data of inputs (x) and targets (y) for training.
     :param split: decide weather you use train or test data; split must be in ['train', 'test']
@@ -22,7 +20,10 @@ def get_batch(split: str,
     :return: batch of inputs (x), targets (y)
     """
 
-    assert split in ['train', 'test'], "Split must be in ['train', 'test']!"
+    block_size = kwargs.get("block_size", None)
+    batch_size = kwargs.get("batch_size", None)
+
+    assert split in ['train', 'val'], "Split must be in ['train', 'val']!"
 
     data = train_data if split == 'train' else test_data
 
@@ -38,19 +39,33 @@ def get_batch(split: str,
 
 
 @torch.no_grad()
-def estimate_loss(model: nn.Module, eval_iters: int = 200):
+def estimate_loss(model: nn.Module,
+                  train_data: torch.Tensor,
+                  test_data: torch.Tensor,
+                  eval_iters: int = 200,
+                  **kwargs):
+
     """
     Estimate the loss of the GPT model while training.
     :param model: PyTorch model for which to estimate loss.
     :param eval_iters: how many iterations to evaluate the model
     :return: evaluation loss
     """
+
+    block_size = kwargs.get("block_size", None)
+    batch_size = kwargs.get("batch_size", None)
+
     out = {}
     model.eval()
     for split in ['train', 'val']:
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
-            X, Y = get_batch(split)
+            X, Y = get_batch(split=split,
+                            block_size=block_size,
+                            batch_size=batch_size,
+                            train_data=train_data,
+                            test_data=test_data)
+
             logits, loss = model(X, Y)
             losses[k] = loss.item()
         out[split] = losses.mean()
@@ -62,7 +77,7 @@ class Head(nn.Module):
     """
     A class that implements a head of attention mechanism in the GPT model.
     """
-    def __init__(self, head_size: int, n_embed: int, block_size: int, dropout: float):
+    def __init__(self, **kwargs):
         """
         Initialize the head of attention mechanism.
         :param head_size: size of attention heads
@@ -70,6 +85,12 @@ class Head(nn.Module):
         :param block_size: the maximum context length (the number of tokens which we use to train the model)
         :param dropout: how much dropout we want to use (meaning: how many activations we want to randomly zero)
         """
+        # head_size: int, n_embed: int, block_size: int, dropout: float
+        head_size = kwargs.get("head_size", None)
+        n_embed = kwargs.get("n_embed", None)
+        block_size = kwargs.get("block_size", None)
+        dropout = kwargs.get("dropout", 0.2)
+
         super().__init__()
 
         # initialize keys, queries and values for attention
@@ -112,7 +133,7 @@ class MultiHeadAttention(nn.Module):
     """
     Initialize the multi-head attention mechanism.
     """
-    def __init__(self, head_size: int, n_embed: int, n_heads: int, block_size:int, dropout: float=0.2):
+    def __init__(self, **kwargs):
         """
         Initialize the multi-head attention mechanism.
         :param head_size: size of attention heads
@@ -120,6 +141,14 @@ class MultiHeadAttention(nn.Module):
         :param n_heads: number of attention heads to initialize
         :param dropout: how much dropout we want to use (meaning: how many activations we want to randomly zero)
         """
+        # head_size: int, n_embed: int, n_heads: int, block_size: int, dropout: float = 0.2
+        head_size = kwargs.get("head_size", None)
+        n_embed = kwargs.get("n_embed", None)
+        n_heads = kwargs.get("n_heads", None)
+        block_size = kwargs.get("block_size", None)
+        dropout = kwargs.get("dropout", 0.2)
+
+
         super().__init__()
         self.n_heads = nn.ModuleList([Head(head_size=head_size,
                                            n_embed=n_embed,
@@ -148,12 +177,14 @@ class FeedForward(nn.Module):
     """
     A very simple linear MLP with ReLu activation function.
     """
-    def __init__(self, n_embed: int, dropout: float=0.2):
+    def __init__(self, **kwargs):
         """
         Initialize a simple feed-forward layer.
         :param n_embed: number of embedding dimensions on which feed-forward layer is applied
         :param dropout: how much dropout we want to use
         """
+        n_embed = kwargs.get('n_embed', None)
+        dropout = kwargs.get('dropout', 0.2)
         super().__init__()
         self.net = nn.Sequential(nn.Linear(n_embed, n_embed),
                                  nn.ReLU(),
@@ -171,20 +202,24 @@ class Block(nn.Module):
     """
     Initialize the block of attention mechanism with normalization layers.
     """
-    def __init__(self, n_embed: int, block_size:int, n_heads: int):
+    def __init__(self, **kwargs):
         """
         A single block of attention.
         :param n_embed: number of embedding dimensions on which attention mechanism is applied
         :param n_heads: number of attention heads to initialize
         """
-        super().__init__()
+        n_embed = kwargs.get('n_embed', None)
+        block_size = kwargs.get('block_size', None)
+        n_heads = kwargs.get('n_heads', None)
         head_size = n_embed // n_heads
+
+        super().__init__()
         self.sa = MultiHeadAttention(head_size=head_size,
                                      n_embed=n_embed,
                                      n_heads=n_heads,
                                      block_size=block_size)
 
-        self.ffwd = FeedForward(n_embed)
+        self.ffwd = FeedForward(**kwargs)
 
         # normalization
         self.ln1 = nn.LayerNorm(n_embed)
@@ -197,77 +232,86 @@ class Block(nn.Module):
         return x
 
 
-    class GPTLanguageModel(nn.Module):
+class GPTLanguageModel(nn.Module):
+    """
+    Define a bigram language model, which a simple NN. Essentially it is a massive scoreboard where
+    every word is a word and every column is it's possible successor.
+    """
+    def __init__(self, **kwargs):
         """
-        Define a bigram language model, which a simple NN. Essentially it is a massive scoreboard where
-        every word is a word and every column is it's possible successor.
+        Initialize GPT language model.
+        :param vocab_size: size of vocabulary
+        :param block_size: size of blocks
+        :param n_heads: number of attention heads to initialize
+        :param n_layer: number of layers
+        :param n_embed: number of embedding dimensions on which attention mechanism is applied
         """
-        def __init__(self, vocab_size: int, block_size: int, n_heads:int, n_layer: int, n_embed: int):
-            """
-            Initialize GPT language model.
-            :param vocab_size: size of vocabulary
-            :param block_size: size of blocks
-            :param n_heads: number of attention heads to initialize
-            :param n_layer: number of layers
-            :param n_embed: number of embedding dimensions on which attention mechanism is applied
-            """
-            super().__init__()
-
-            # token identity encoding
-            self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
-
-            # token position encoding
-            self.position_embedding_table = nn.Embedding(block_size, n_embed)
-
-            # initialize blocks of attention
-            self.blocks = nn.Sequential(*[Block(n_embed, n_heads=n_heads) for _ in range(n_layer)])
-
-            self.ln_f = nn.LayerNorm(n_embed)  # final layer norm
-
-            self.lm_head = nn.Linear(n_embed, vocab_size)  # language modeling head
+        vocab_size = kwargs.get("vocab_size", None)
+        block_size = kwargs.get("block_size", None)
+        n_heads = kwargs.get("n_heads", None)
+        n_layer = kwargs.get("n_layer", None)
+        n_embed = kwargs.get("n_embed", None)
 
 
-        def forward(self, idx, device: str = 'cpu', targets=None):
-            B, T = idx.shape
+        super().__init__()
+        # token identity encoding
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
 
-            # position embeddings
-            pos_emd = self.position_embedding_table(torch.arange(T).to(device=device))  # -> (T, C)
+        # token position encoding
+        self.position_embedding_table = nn.Embedding(block_size, n_embed)
 
-            # token embeddings
-            tok_emb = self.token_embedding_table(idx)  # B, T, C (embed C)
+        # initialize blocks of attention
+        self.blocks = nn.Sequential(*[Block(**kwargs) for _ in range(n_layer)])
 
-            # add token embeddings and position embeddings
-            x = tok_emb + pos_emd
-            x = self.blocks(x)  # feed the into to self-attention head
-            # x = self.ffwd(x) # feedforward after self-attention
-            logits = self.lm_head(x)  # B, T, C (vocab size C)
+        self.ln_f = nn.LayerNorm(n_embed)  # final layer norm
 
-            if targets is None:
-                loss = None
-            else:
-                # reshape
-                B, T, C = logits.shape
-                logits = logits.view(B * T, C)
-
-                targets = targets.view(B * T)
-                loss = F.cross_entropy(logits, targets)  # Negative Log Likelihood
-            return logits, loss
+        self.lm_head = nn.Linear(n_embed, vocab_size)  # language modeling head
 
 
-        def generate(self, idx, block_size: int, max_new_tokens: int):
-            for _ in range(max_new_tokens):
-                # crop the size to block size
-                idx_cond = idx[:, -block_size:]
-                logits, loss = self(idx_cond)  # predictions
-                logits = logits[:, -1, :]  # -> (B, C)
+    def forward(self, idx, targets=None):
+        B, T = idx.shape
 
-                # apply softmax to get probabilities
-                probs = F.softmax(logits, dim=-1)  # (B, C)
+        # position embeddings
+        pos_emd = self.position_embedding_table(torch.arange(T).to(idx.device))  # -> (T, C)
 
-                # sample from the distribution
-                idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
+        # token embeddings
+        tok_emb = self.token_embedding_table(idx)  # B, T, C (embed C)
 
-                # append sampled index to the running sequence
-                idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
-            return idx
+        # add token embeddings and position embeddings
+        x = tok_emb + pos_emd
+        x = self.blocks(x)  # feed the into to self-attention head
+        # x = self.ffwd(x) # feedforward after self-attention
+        logits = self.lm_head(x)  # B, T, C (vocab size C)
+
+        if targets is None:
+            loss = None
+        else:
+            # reshape
+            B, T, C = logits.shape
+            logits = logits.view(B * T, C)
+
+            targets = targets.view(B * T)
+            loss = F.cross_entropy(logits, targets)  # Negative Log Likelihood
+        return logits, loss
+
+
+    def generate(self, idx, max_new_tokens: int, **kwargs):
+        block_size = kwargs.get('block_size', 0)
+        assert block_size != 0, "Block size == 0."
+
+        for _ in range(max_new_tokens):
+            # crop the size to block size
+            idx_cond = idx[:, -block_size:]
+            logits, loss = self(idx_cond)  # predictions
+            logits = logits[:, -1, :]  # -> (B, C)
+
+            # apply softmax to get probabilities
+            probs = F.softmax(logits, dim=-1)  # (B, C)
+
+            # sample from the distribution
+            idx_next = torch.multinomial(probs, num_samples=1)  # (B, 1)
+
+            # append sampled index to the running sequence
+            idx = torch.cat((idx, idx_next), dim=1)  # (B, T+1)
+        return idx
 

@@ -80,6 +80,8 @@ params = {'vocab_size': vocab_size,
 model = md.GPTLanguageModel(**params)
 m = model.to(device)
 
+print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
+
 # create optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 

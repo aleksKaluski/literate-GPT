@@ -114,17 +114,25 @@ class Head(nn.Module):
         k = self.key(x)   # (B,T,hs)
         q = self.query(x) # (B,T,hs)
 
-        # compute attention scores
-        wei = q @ k.transpose(-2,-1) * k.shape[-1]**-0.5 # (B, T, hs) @ (B, hs, T) -> (B, T, T)
+        v = self.value(x)  # (B,T,hs)
 
-        # make sure that the feature does not communicate with the past
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
-        wei = F.softmax(wei, dim=-1) # (B, T, T)
-        wei = self.dropout(wei)
+        # flash attention (works only with CUDA)
+        out = F.scaled_dot_product_attention(q, k, v,
+                                             is_causal=True,
+                                             dropout_p=self.dropout.p if self.training else 0.0)
 
-        # perform the weighted aggregation of the values
-        v = self.value(x) # (B,T,hs)
-        out = wei @ v # (B, T, T) @ (B, T, hs) -> (B, T, hs)
+        # # compute attention scores
+        # wei = q @ k.transpose(-2,-1) * k.shape[-1]**-0.5 # (B, T, hs) @ (B, hs, T) -> (B, T, T)
+        #
+        # # make sure that the feature does not communicate with the past
+        # wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
+        # wei = F.softmax(wei, dim=-1) # (B, T, T)
+        # wei = self.dropout(wei)
+        #
+        # # perform the weighted aggregation of the values
+        # v = self.value(x) # (B,T,hs)
+        # out = wei @ v # (B, T, T) @ (B, T, hs) -> (B, T, hs)
+
         return out # (Batch, Time, Head Size)
 
 
@@ -247,12 +255,12 @@ class GPTLanguageModel(nn.Module):
         """
         vocab_size = kwargs.get("vocab_size", None)
         block_size = kwargs.get("block_size", None)
-        n_heads = kwargs.get("n_heads", None)
         n_layer = kwargs.get("n_layer", None)
         n_embed = kwargs.get("n_embed", None)
 
 
         super().__init__()
+
         # token identity encoding
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
 
@@ -264,7 +272,14 @@ class GPTLanguageModel(nn.Module):
 
         self.ln_f = nn.LayerNorm(n_embed)  # final layer norm
 
-        self.lm_head = nn.Linear(n_embed, vocab_size)  # language modeling head
+        # we add weight tying mechanism
+        # turn off the bias
+        self.lm_head = nn.Linear(n_embed, vocab_size, bias=False)  # language modeling head
+
+        # token identity encoding
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
+        self.lm_head.weight = self.token_embedding_table.weight # tie weights
+
 
 
     def forward(self, idx, targets=None):

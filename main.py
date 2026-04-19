@@ -20,7 +20,7 @@ token_ids = tokenizer.encode(text)
 # encode and decode chars
 
 chars = sorted(list(set(text)))
-vocab_size = len(chars)
+vocab_size = tokenizer.n_vocab
 
 # encode the text and wrap it into data tensor
 data = torch.tensor(token_ids, dtype=torch.long)
@@ -64,7 +64,7 @@ print(f"Head Size:    {head_size}")
 print("-" * 30)
 
 # pass arguments as kwargs
-params = {'vocab_size': len(chars),
+params = {'vocab_size': vocab_size,
           'block_size': block_size,
           'batch_size': batch_size,
           'n_heads': n_head,

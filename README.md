@@ -13,5 +13,9 @@ model for text generation. However, we aim to introduce certain improvements and
 2. Make set your parameters in `main.py`
 3. Train the model on a mock example by using `python main.py`
 
+## Interesting improvements 
+* We introduce `tiktoken` tokenization, that was orginally used in GPT-2 model. 
+* 
+
 ## Sources
 * https://www.youtube.com/watch?v=kCc8FmEb1nY&t=6033s

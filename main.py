@@ -1,7 +1,8 @@
 from src import model as md
-from src import data_preprocessing as dp
+from src import preprocessing as dp
 import os
 import torch
+import tiktoken
 
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -9,7 +10,11 @@ print(f"\nCurrent working directory: {os.getcwd()}")
 
 #########################################################################################
 # load the data
-text = dp.preprocess_data(path_to_file=r'data/mock_data.txt')
+text = dp.clean_text(path_to_file=r'data/mock_data.txt')
+
+# encode and decode chars
+tokenizer = tiktoken.get_encoding("gpt2")
+token_ids = tokenizer.encode(text)
 
 #########################################################################################
 # encode and decode chars
@@ -17,21 +22,11 @@ text = dp.preprocess_data(path_to_file=r'data/mock_data.txt')
 chars = sorted(list(set(text)))
 vocab_size = len(chars)
 
-# encode the characters
-stoi = {ch:i for i, ch in enumerate(chars)} # set of char-number pairs
-itos = {i:ch for i, ch in enumerate(chars)}
-
-# encoder
-encode = lambda s: [stoi[c] for c in s]
-
-# decoder
-decode = lambda l: ''.join([itos[i] for i in l])
-
 # encode the text and wrap it into data tensor
-data = torch.tensor(encode(text), dtype=torch.long)
+data = torch.tensor(token_ids, dtype=torch.long)
 
 # train-test split
-n = int(0.9 * len(data)) # 90%
+n = int(0.9 * len(data)) # 70%
 train_data = data[:n]
 test_data = data[n:]
 
@@ -113,6 +108,6 @@ for iter in range(max_iters):
 
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(decode(m.generate(context,
+print(tokenizer.decode(m.generate(context,
                         max_new_tokens=500,
                         **params)[0].tolist()))

@@ -3,18 +3,17 @@ Here we keep the core architecture of the GPT model.
 """
 import torch
 import torch.nn as nn
+from torch import Tensor
 from torch.nn import functional as F
 
 
 def get_batch(split: str,
               train_data: torch.Tensor,
               test_data: torch.Tensor,
-              **kwargs) -> torch.utils.data.DataLoader:
+              **kwargs) -> tuple[Tensor, Tensor]:
     """
     Generate a batch of data of inputs (x) and targets (y) for training.
     :param split: decide weather you use train or test data; split must be in ['train', 'test']
-    :param batch_size: decides how many rows are in x and y
-    :param block_size: decides how many tokens are in each row
     :param train_data: torch.long containing training data
     :param test_data: torch.long containing test data
     :return: batch of inputs (x), targets (y)
@@ -22,6 +21,7 @@ def get_batch(split: str,
 
     block_size = kwargs.get("block_size", None)
     batch_size = kwargs.get("batch_size", None)
+    device = kwargs.get("device", "cpu")
 
     assert split in ['train', 'val'], "Split must be in ['train', 'val']!"
 
@@ -35,7 +35,7 @@ def get_batch(split: str,
 
     # offset of bock chars by 1
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
-    return x, y
+    return x.to(device), y.to(device)
 
 
 @torch.no_grad()
@@ -61,10 +61,9 @@ def estimate_loss(model: nn.Module,
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split=split,
-                            block_size=block_size,
-                            batch_size=batch_size,
                             train_data=train_data,
-                            test_data=test_data)
+                            test_data=test_data,
+                             **kwargs)
 
             logits, loss = model(X, Y)
             losses[k] = loss.item()
@@ -269,6 +268,12 @@ class GPTLanguageModel(nn.Module):
 
 
     def forward(self, idx, targets=None):
+
+        device = next(self.parameters()).device
+        idx = idx.to(device)
+        if targets is not None:
+            targets = targets.to(device)
+
         B, T = idx.shape
 
         # position embeddings

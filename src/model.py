@@ -194,7 +194,7 @@ class FeedForward(nn.Module):
         dropout = kwargs.get('dropout', 0.2)
         super().__init__()
         self.net = nn.Sequential(nn.Linear(n_embed, n_embed),
-                                 nn.ReLU(),
+                                 nn.GELU(), # GELU instead of ReLu in FeedForward
                                  # projection layer going back to the
                                  # residual pathway
                                  nn.Linear(n_embed, n_embed),

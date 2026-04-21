@@ -3,7 +3,6 @@ A set of functions designed for quick date encoding and preprocessing.
 """
 import os
 import re
-import tiktoken
 
 def clean_text(path_to_file: str, start_line: int =1, end_line: int =1) -> str:
 

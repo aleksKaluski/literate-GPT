@@ -85,6 +85,9 @@ print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
 # create optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
+# introduce Cosine Annealing
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_iters)
+
 for iter in range(max_iters):
 
     # every once in a while evaluate the loss on train and val sets
@@ -107,6 +110,7 @@ for iter in range(max_iters):
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
+    scheduler.step()
 
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)

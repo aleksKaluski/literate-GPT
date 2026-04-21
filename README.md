@@ -19,6 +19,11 @@ model for text generation. However, we aim to introduce certain improvements and
 Flash attention reduces the complexity by using ultra-fast SRAM GPU memory.
 * We emply **weight tieing**. By setting the same weights of `lm_head` and `token_embedding_table` in GPT model.
 Thanks to that we reduce the paramters of the model and save VRAM memory.
+* In `FeedForaward` class we use the Gaussian Error Linear Unit (**GELU**) instead of classical **ReLU**. GELU
+weights the input with its probability of being dropped or kept. It scales the input by the Cumulative Distribution Function (CDF) 
+of a standard Gaussian distribution.
+* We employ **cosine annealing**. We start with very low learning rate, then increase it quicklu and then slowly 
+make this number smaller. 
 
 ## Sources
 * https://www.youtube.com/watch?v=kCc8FmEb1nY&t=6033s

@@ -1,26 +1,48 @@
 from src import model as md
-from src import preprocessing as dp
+from src import preprocessing as pp
 import os
 import torch
 import tiktoken
-
+import pandas as pd
+from datasets import load_dataset
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 print(f"\nCurrent working directory: {os.getcwd()}")
 
 #########################################################################################
 # load the data
-text = dp.clean_text(path_to_file=r'data/mock_data.txt')
+# text = dp.clean_text(path_to_file=r'data/mock_data.txt')
+df_full = pd.read_parquet("hf://datasets/ruggsea/stanford-encyclopedia-of-philosophy_chat_multi_turn/data/train-00000-of-00001.parquet")
+df_full = df_full.head(100)
+
+
+text = pp.process_dataset(df_full, column="conversation")
+
+
+# add special tokens
+special_tokens = {
+    "<|user|>": 50257,
+    "<|assistant|>": 50258
+}
+
 
 # encode and decode chars
-tokenizer = tiktoken.get_encoding("gpt2")
-token_ids = tokenizer.encode(text)
+basic_tokenizer = tiktoken.get_encoding("gpt2")
+tokenizer = tiktoken.Encoding(
+    name="chat_gpt2",
+    pat_str=basic_tokenizer._pat_str,
+    mergeable_ranks=basic_tokenizer._mergeable_ranks,
+    special_tokens={**basic_tokenizer._special_tokens, **special_tokens}
+)
+
+# add conversational tokens
+token_ids = tokenizer.encode(text, allowed_special={"<|user|>", "<|assistant|>", "<|endoftext|>"})
 
 #########################################################################################
 # encode and decode chars
+# chars = sorted(list(set(text)))
 
-chars = sorted(list(set(text)))
-vocab_size = tokenizer.n_vocab
+vocab_size = tokenizer.n_vocab + len(special_tokens)
 
 # encode the text and wrap it into data tensor
 data = torch.tensor(token_ids, dtype=torch.long)

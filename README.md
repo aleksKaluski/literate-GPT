@@ -5,6 +5,7 @@ model for text generation. However, we aim to introduce certain improvements and
 ## Project Structure 
 * `data` - keeps mock example for training
 * `src`
+  * `preprocessing.py` - prepare the text for training
   * `model.py` - core GPT architecture
 * `main.py` - script for initializing the model and training
 
@@ -24,6 +25,15 @@ weights the input with its probability of being dropped or kept. It scales the i
 of a standard Gaussian distribution.
 * We employ **cosine annealing**. We start with very low learning rate, then increase it quicklu and then slowly 
 make this number smaller. 
+
+## Requirements
+Install the required packages via _pip_:
+```pycon
+pip install datasets numpy pandas
+```
+
+
+
 
 ## Sources
 * https://www.youtube.com/watch?v=kCc8FmEb1nY&t=6033s

@@ -6,7 +6,7 @@ import re
 import pandas as pd
 
 
-def clean_text(path_to_file: str, start_line: int =1, end_line: int =1) -> str:
+def process_classical_txt(path_to_file: str, start_line: int =1, end_line: int =1) -> str:
     """
     Extract the data from TXT files.
     :param path_to_file: path to file
@@ -22,35 +22,37 @@ def clean_text(path_to_file: str, start_line: int =1, end_line: int =1) -> str:
         assert len(text) != 0, "No data to train and evaluate! Your file probably has only one line."
 
         # clean text
-        cleaned = re.sub(r'[^a-zA-Z .,:()]', '', text)
+        cleaned = clean(text)
         return cleaned
 
 
-def process_row(row: dict[str, str]) -> str:
+def clean(text: str) -> str:
     """
-    Process a single row of HF dataset in order to create
-    conversational dataset.
+    Clean text and return a single string.
     """
-    result = ""
-    for turn in row:
-        if turn['role'] == 'user':
-            result += "<|user|>\n"
-            result += turn['content'] + "\n"
-        elif turn['role'] == 'assistant':
-            result += "<|assistant|>\n"
-            result += turn['content'] + "\n"
-
-    # last token
-    result += "<|endoftext|>"
-    return result
+    cleaned = re.sub(r'[^a-zA-Z0-9 .,:()<>|\n]', '', text)
+    return "".join(cleaned)
 
 
-def process_dataset(df: pd.DataFrame, column: str) -> list[str]:
+def process_conversational_dataset(df: pd.DataFrame, column: str) -> list[str]:
     """
     Process HF dataset to create conversational dataset.
     """
     text = ""
     for row in df[column]:
-        text += process_row(row)
+        conversation = ""
+        for turn in row:
+            if turn['role'] == 'user':
+                content = clean(turn['content'])
+                conversation += "<|user|>\n"
+                conversation += content + "\n"
+            elif turn['role'] == 'assistant':
+                content = clean(turn['content'])
+                conversation += "<|assistant|>\n"
+                conversation += content + "\n"
+        # last token
+        conversation += "<|endoftext|>" + '\n'
+        text += conversation
     return text
+
 

@@ -16,7 +16,7 @@ df_full = pd.read_parquet("hf://datasets/ruggsea/stanford-encyclopedia-of-philos
 df_full = df_full.head(100)
 
 
-text = pp.process_dataset(df_full, column="conversation")
+text = pp.process_conversational_dataset(df_full, column="conversation")
 
 
 # add special tokens
@@ -24,7 +24,6 @@ special_tokens = {
     "<|user|>": 50257,
     "<|assistant|>": 50258
 }
-
 
 # encode and decode chars
 basic_tokenizer = tiktoken.get_encoding("gpt2")
@@ -39,9 +38,6 @@ tokenizer = tiktoken.Encoding(
 token_ids = tokenizer.encode(text, allowed_special={"<|user|>", "<|assistant|>", "<|endoftext|>"})
 
 #########################################################################################
-# encode and decode chars
-# chars = sorted(list(set(text)))
-
 vocab_size = tokenizer.n_vocab + len(special_tokens)
 
 # encode the text and wrap it into data tensor

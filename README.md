@@ -1,12 +1,13 @@
 # Literate GPT
-This repository contains GPT code implemented by Andrej Karpathy in his famous YT tutorial. As for now, it is a simple
-model for text generation. However, we aim to introduce certain improvements and make it conversational. 
+This repository contains GPT code implemented by Andrej Karpathy in his famous YT tutorial. 
+The model is trainable from scratch and conversational.
 
 ## Project Structure 
 * `data` - keeps mock example for training
 * `src`
   * `preprocessing.py` - prepare the text for training
   * `model.py` - core GPT architecture
+  * `conversation.py` - architecture for managing the context 
 * `main.py` - script for initializing the model and training
 
 ## Quick Start
@@ -24,7 +25,19 @@ Thanks to that we reduce the paramters of the model and save VRAM memory.
 weights the input with its probability of being dropped or kept. It scales the input by the Cumulative Distribution Function (CDF) 
 of a standard Gaussian distribution.
 * We employ **cosine annealing**. We start with very low learning rate, then increase it quicklu and then slowly 
-make this number smaller. 
+make this number smaller.
+
+## Conversational validity
+The goal of this repo was to make the model conversational, and we succeeded! You can talk with the model 
+trained on your own data via the terminal. Of course, training is costly. 
+Thus, unless you set sufficiently large parameters, you will end up with something 
+that resembles a blended dictionary rather than a 19th-century philosopher.
+
+**How we did it?**
+* We utilize conversational datasets such as this **multi-turn conversational** [dataset](hf://datasets/ruggsea/stanford-encyclopedia-of-philosophy_chat_multi_turn/)
+based on SEOP (btw, I am looking forward to reading "Principia Metaphysica" by the SEP main editor :)).
+* We label each turn with a set of **tokens**: _'<|assistant|>', '<|user|>', '<|endoftext|>'_.
+* Finally, we **train** the model on labeled conversational data.
 
 ## Requirements
 Install the required packages via _pip_:

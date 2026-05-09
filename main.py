@@ -59,7 +59,7 @@ torch.manual_seed(42)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 batch_size = 16
-block_size = 32
+block_size = 64
 n_embed = 32
 n_head = 8
 n_layer = 8

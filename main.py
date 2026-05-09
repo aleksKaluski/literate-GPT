@@ -4,7 +4,9 @@ import os
 import torch
 import tiktoken
 import pandas as pd
+from preprocessing import clean
 from datasets import load_dataset
+from src.conversation import ConversationHistory
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 print(f"\nCurrent working directory: {os.getcwd()}")
@@ -56,16 +58,16 @@ assert len(test_data) != 0
 torch.manual_seed(42)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-batch_size = 8
-block_size = 16
-n_embed = 16
-n_head = 4
-n_layer = 4
+batch_size = 16
+block_size = 32
+n_embed = 32
+n_head = 8
+n_layer = 8
 dropout = 0.2
-max_iters = 1000
+max_iters = 3000
 eval_interval = 200
 learning_rate = 2e-3
-eval_iters = 200
+eval_iters = 400
 head_size = n_embed // n_head
 
 
@@ -130,8 +132,37 @@ for iter in range(max_iters):
     optimizer.step()
     scheduler.step()
 
+#########################################################################################
 # generate from the model
-context = torch.zeros((1, 1), dtype=torch.long, device=device)
-print(tokenizer.decode(m.generate(context,
-                        max_new_tokens=500,
-                        **params)[0].tolist()))
+# initialize history
+history = ConversationHistory(lm_memory_size=block_size, tokenizer=tokenizer ,device=device)
+
+print(f"Welcome to the API with GPT-transformer!")
+print(f"To end the conversation, type 'exit'.")
+context = history.return_context()
+
+# say 'hi' to the user
+output_tensor = m.generate(context, max_new_tokens=50, **params)
+response = tokenizer.decode(output_tensor[0, context.shape[1]:].tolist())
+print(f"[james]: {response}")
+history.append(text=response, role="assistant")
+
+while True:
+
+    user_input = input("[user]: ")
+    user_input_cleaned = clean(user_input)
+    if user_input == "exit":
+        break
+    history.append(text=user_input_cleaned, role="user")
+    context = history.return_context()
+
+    # normal response returns the entire context
+    output_tensor = m.generate(context, max_new_tokens=50, **params)
+
+    # take just newly generated tokens
+    response = tokenizer.decode(output_tensor[0, context.shape[1]:].tolist())
+
+    print(f"James: {response}")
+    history.append(text=response, role="assistant")
+
+

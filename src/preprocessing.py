@@ -51,7 +51,7 @@ def clean(text: str) -> str:
     """
     Clean text and return a single string.
     """
-    cleaned = re.sub(r'[^a-zA-Z0-9 .,:()<>|\n]', '', text)
+    cleaned = re.sub(r'[^a-zA-Z0-9 .,:()?!]', '', text)
     return "".join(cleaned)
 
 

@@ -1,9 +1,6 @@
 from src import model as md
-from src import preprocessing as pp
 import os
 import torch
-import tiktoken
-import pandas as pd
 from src.conversation import ConversationHistory
 from src.preprocessing import clean, get_chat_tokenizer
 import json
@@ -12,8 +9,6 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 print(f"\nCurrent working directory: {os.getcwd()}")
 
 #########################################################################################
-
-
 # Load the params
 with open("data/cfg.json", "r", encoding="utf-8") as f:
     params = json.load(f)

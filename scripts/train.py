@@ -22,7 +22,7 @@ print(f"Current working directory: {os.getcwd()}")
 # load the data
 # text = dp.clean_text(path_to_file=r'data/mock_data.txt')
 df_full = pd.read_parquet("hf://datasets/ruggsea/stanford-encyclopedia-of-philosophy_chat_multi_turn/data/train-00000-of-00001.parquet")
-df_full = df_full.head(100)
+df_full = df_full.head(300)
 
 
 text = pp.process_conversational_dataset(df_full, column="conversation")
@@ -73,6 +73,19 @@ print(f"Head Size:\t{params['head_size'] }")
 print(f"Device:\t{params['device']}")
 print(f"checkpoint_interval:\t{params['checkpoint_interval']}")
 
+# add README file to get to now the state of the model
+metadata = open("data/metadata.txt", 'w',  encoding='utf-8')
+metadata.write(f"{'Dataset Metrics':-^30}\n")
+metadata.write(f"Train Length: {len(train_data)}\n")
+metadata.write(f"Val Length:   {len(test_data)}\n")
+metadata.write(f"Block Size:   {params['batch_size']}\n")
+metadata.write(f"\n{'Model Hyperparameters':-^30}\n")
+metadata.write(f"Vocab Size:\t{params['n_embed']}\n")
+metadata.write(f"Embed Dim:\t{params['n_embed']}\n")
+metadata.write(f"Head Size:\t{params['n_heads']}\n")
+metadata.write(f"Head Size:\t{params['n_heads']}\n")
+metadata.write(f"Device:\t{params['device']}\n")
+metadata.write(f"checkpoint_interval:\t{params['checkpoint_interval']}\n\n")
 
 #########################################################################################
 # initialize model
@@ -89,6 +102,8 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=params['learning_rate'])
 # introduce Cosine Annealing
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=params['max_iters'])
 
+last_train_loss = 0
+last_val_loss = 0
 for iter in range(params['max_iters']):
 
     # every once in a while evaluate the loss on train and val sets
@@ -99,6 +114,8 @@ for iter in range(params['max_iters']):
                                   **params)
 
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        last_train_loss = losses['train']
+        last_val_loss = losses['val']
 
     if iter != 0 and iter % params['checkpoint_interval'] == 0:
         timestamp = datetime.now().strftime('%H-%M-%S_%d_%m_%Y')
@@ -109,6 +126,12 @@ for iter in range(params['max_iters']):
         print("-"*30)
         print(f"Model saved to {filename}")
         print("-" * 30)
+
+        metadata.write(f"Model: william_james_{timestamp}\n")
+        metadata.write(f"Number of steps:{iter}\n")
+        metadata.write(f"Last train loss {last_train_loss:.4f}\n")
+        metadata.write(f"Last val loss {last_val_loss:.4f}\n")
+        metadata.write("-" * 30 + "\n")
 
     # sample a batch of data
     xb, yb = md.get_batch(split='train',
@@ -131,6 +154,13 @@ os.makedirs("models", exist_ok=True)
 
 torch.save(model.state_dict(), filename)
 print(f"\nFinal model saved to {filename}")
+
+metadata.write(f"Model: william_james_{timestamp}\n")
+metadata.write(f"Number of steps:{params['max_iters']}\n")
+metadata.write(f"Last train loss {last_train_loss:.4f}\n")
+metadata.write(f"Last val loss {last_val_loss:.4f}\n")
+metadata.write("-" * 30 + "\n")
+metadata.close()
 
 # sve the params to JSON
 with open("data/cfg.json", "w", encoding="utf-8") as f:

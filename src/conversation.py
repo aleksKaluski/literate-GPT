@@ -1,6 +1,8 @@
 """
-This file keeps all the important conversational tools that we need to have.
+This file keeps all the important conversational tools that we need to have in order to
+talk to the models.
 """
+
 import torch
 
 class ConversationHistory():

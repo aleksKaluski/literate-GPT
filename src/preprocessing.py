@@ -1,6 +1,7 @@
 """
 A set of functions designed for quick date encoding and preprocessing.
 """
+
 import os
 import re
 import pandas as pd

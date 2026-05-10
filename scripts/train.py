@@ -1,5 +1,6 @@
 """
 This script trains the model and make an output with timestamps.
+It also saves instances of the model while training.
 """
 
 from src import model as md

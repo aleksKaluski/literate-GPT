@@ -1,6 +1,7 @@
 """
 Here we keep the core architecture of the GPT model.
 """
+
 import torch
 import torch.nn as nn
 from torch import Tensor

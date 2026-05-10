@@ -1,3 +1,7 @@
+"""
+A script that loads the model and then enables us to talk with it.
+"""
+
 from src import model as md
 import os
 import torch
@@ -22,7 +26,7 @@ tokenizer = get_chat_tokenizer()
 
 # initialize model
 model = md.GPTLanguageModel(**params)
-load_path = "models/william_james_13-03-23_10_05_2026.pt"
+load_path = "models/william_james_16-40-23_10_05_2026.pt"
 
 # load and inject the weights into the model
 if os.path.exists(load_path):
@@ -52,7 +56,6 @@ print(f"[james]: {response}")
 history.append(text=response, role="assistant")
 
 while True:
-
     user_input = input("[user]: ")
     user_input_cleaned = clean(user_input)
     if user_input == "exit":
@@ -66,7 +69,7 @@ while True:
     # take just newly generated tokens
     response = tokenizer.decode(output_tensor[0, context.shape[1]:].tolist())
 
-    print(f"James: {response}")
+    print(f"[james]: {response}")
     history.append(text=response, role="assistant")
 
 

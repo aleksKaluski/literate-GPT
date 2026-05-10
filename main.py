@@ -4,9 +4,8 @@ import os
 import torch
 import tiktoken
 import pandas as pd
-from preprocessing import clean
-from datasets import load_dataset
 from src.conversation import ConversationHistory
+from src.preprocessing import clean
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 print(f"\nCurrent working directory: {os.getcwd()}")
@@ -57,14 +56,15 @@ assert len(test_data) != 0
 # define key params
 torch.manual_seed(42)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f"Device: {device}")
 
 batch_size = 16
-block_size = 64
+block_size = 32
 n_embed = 32
 n_head = 8
 n_layer = 8
 dropout = 0.2
-max_iters = 3000
+max_iters = 1000
 eval_interval = 200
 learning_rate = 2e-3
 eval_iters = 400

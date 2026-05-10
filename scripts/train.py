@@ -10,9 +10,9 @@ import tiktoken
 import pandas as pd
 import json
 from pathlib import Path
-import datetime
+from datetime import datetime
 from src.conversation import ConversationHistory
-from src.preprocessing import clean
+from src.preprocessing import clean, get_chat_tokenizer
 
 parent_dir = Path(__file__).resolve().parent.parent
 os.chdir(parent_dir)
@@ -26,28 +26,13 @@ df_full = df_full.head(100)
 
 
 text = pp.process_conversational_dataset(df_full, column="conversation")
-
-
-# add special tokens
-special_tokens = {
-    "<|user|>": 50257,
-    "<|assistant|>": 50258
-}
-
-# encode and decode chars
-basic_tokenizer = tiktoken.get_encoding("gpt2")
-tokenizer = tiktoken.Encoding(
-    name="chat_gpt2",
-    pat_str=basic_tokenizer._pat_str,
-    mergeable_ranks=basic_tokenizer._mergeable_ranks,
-    special_tokens={**basic_tokenizer._special_tokens, **special_tokens}
-)
+tokenizer = get_chat_tokenizer()
 
 # add conversational tokens
 token_ids = tokenizer.encode(text, allowed_special={"<|user|>", "<|assistant|>", "<|endoftext|>"})
 
 #########################################################################################
-vocab_size = tokenizer.n_vocab + len(special_tokens)
+vocab_size = tokenizer.n_vocab + 2
 
 # encode the text and wrap it into data tensor
 data = torch.tensor(token_ids, dtype=torch.long)
@@ -69,43 +54,25 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 with open("data/cfg.json", "r", encoding="utf-8") as f:
     params = json.load(f)
 
-batch_size = params.pop("batch_size")
-block_size = params.pop("block_size")
-n_embed = params.pop("n_embed")
-n_head = params.pop("n_head")
-n_layer = params.pop("n_layer")
-dropout = params.pop("dropout")
-max_iters = params.pop("max_iters")
-eval_interval = params.pop("eval_interval")
-learning_rate = params.pop("learning_rate")
-eval_iters = params
-head_size = n_embed // n_head
+
+params['vocab_size'] = tokenizer.n_vocab + 2
+params['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
+params['head_size'] = int(params['n_embed']) // int(params['n_heads'])
 
 
 print(f"{'Dataset Metrics':-^30}")
 print(f"Train Length: {len(train_data)}")
 print(f"Val Length:   {len(test_data)}")
-print(f"Block Size:   {block_size}")
+print(f"Block Size:   {params['batch_size']}")
 
 print(f"\n{'Model Hyperparameters':-^30}")
 print(f"Vocab Size:\t{vocab_size}")
-print(f"Embed Dim:\t{n_embed}")
-print(f"Heads:\t{n_head}")
-print(f"Head Size:\t{head_size}")
-print(f"Device:\t{device}")
+print(f"Embed Dim:\t{params['n_embed']}")
+print(f"Heads:\t{params['n_heads']}")
+print(f"Head Size:\t{params['head_size'] }")
+print(f"Device:\t{params['device']}")
+print(f"checkpoint_interval:\t{params['checkpoint_interval']}")
 
-
-# pass arguments as kwargs
-params = {'vocab_size': vocab_size,
-          'block_size': block_size,
-          'batch_size': batch_size,
-          'n_heads': n_head,
-          'n_layer': n_layer,
-          'n_embed': n_embed,
-          'dropout': dropout,
-          'head_size': head_size,
-          'device': device
-          }
 
 #########################################################################################
 # initialize model
@@ -117,21 +84,31 @@ print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
 print("Training:")
 
 # create optimizer
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=params['learning_rate'])
 
 # introduce Cosine Annealing
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_iters)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=params['max_iters'])
 
-for iter in range(max_iters):
+for iter in range(params['max_iters']):
 
     # every once in a while evaluate the loss on train and val sets
-    if iter % eval_interval == 0:
+    if iter % params['eval_interval'] == 0:
         losses = md.estimate_loss(model=model,
                                   train_data=train_data,
                                   test_data=test_data,
                                   **params)
 
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
+    if iter != 0 and iter % params['checkpoint_interval'] == 0:
+        timestamp = datetime.now().strftime('%H-%M-%S_%d_%m_%Y')
+        filename = f"models/william_james_{timestamp}.pt"
+        os.makedirs("models", exist_ok=True)
+
+        torch.save(model.state_dict(), filename)
+        print("-"*30)
+        print(f"Model saved to {filename}")
+        print("-" * 30)
 
     # sample a batch of data
     xb, yb = md.get_batch(split='train',
@@ -148,11 +125,13 @@ for iter in range(max_iters):
 
 #########################################################################################
 # save the model
-timestamp = datetime.now().strftime('%H-%M_%d_%m_%Y')
+timestamp = datetime.now().strftime('%H-%M-%S_%d_%m_%Y')
 filename = f"models/william_james_{timestamp}.pt"
 os.makedirs("models", exist_ok=True)
 
 torch.save(model.state_dict(), filename)
-print(f"Model saved to {filename}")
+print(f"\nFinal model saved to {filename}")
 
-
+# sve the params to JSON
+with open("data/cfg.json", "w", encoding="utf-8") as f:
+    json.dump(params, f, indent=4, ensure_ascii=False)

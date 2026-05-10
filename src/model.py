@@ -218,7 +218,7 @@ class Block(nn.Module):
         n_embed = kwargs.get('n_embed', None)
         block_size = kwargs.get('block_size', None)
         n_heads = kwargs.get('n_heads', None)
-        head_size = n_embed // n_heads
+        head_size = kwargs.get('head_size', None)
 
         super().__init__()
         self.sa = MultiHeadAttention(head_size=head_size,

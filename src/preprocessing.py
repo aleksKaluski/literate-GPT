@@ -4,6 +4,27 @@ A set of functions designed for quick date encoding and preprocessing.
 import os
 import re
 import pandas as pd
+import tiktoken
+
+
+def get_chat_tokenizer():
+    # add special tokens
+    special_tokens = {
+        "<|user|>": 50257,
+        "<|assistant|>": 50258
+    }
+
+    # encode and decode chars
+    basic_tokenizer = tiktoken.get_encoding("gpt2")
+
+    # Construct the custom chat tokenizer
+    tokenizer = tiktoken.Encoding(
+        name="chat_gpt2",
+        pat_str=basic_tokenizer._pat_str,
+        mergeable_ranks=basic_tokenizer._mergeable_ranks,
+        special_tokens={**basic_tokenizer._special_tokens, **special_tokens}
+    )
+    return tokenizer
 
 
 def process_classical_txt(path_to_file: str, start_line: int =1, end_line: int =1) -> str:

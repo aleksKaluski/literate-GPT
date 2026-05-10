@@ -2,11 +2,15 @@
     "batch_size": 8,
     "block_size": 16,
     "n_embed": 16,
-    "n_head": 4,
+    "n_heads": 4,
     "n_layer": 4,
     "dropout": 0.1,
     "max_iters": 1000,
     "eval_interval": 200,
-    "learning_rate": 2e-3,
-    "eval_iters": 400
+    "learning_rate": 0.002,
+    "eval_iters": 400,
+    "checkpoint_interval": 10000,
+    "vocab_size": 50261,
+    "device": "cpu",
+    "head_size": 4
 }

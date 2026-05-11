@@ -26,7 +26,7 @@ tokenizer = get_chat_tokenizer()
 
 # initialize model
 model = md.GPTLanguageModel(**params)
-load_path = "models/william_james_16-40-23_10_05_2026.pt"
+load_path = "models/william_james_16-15-30_11_05_2026.pt"
 
 # load and inject the weights into the model
 if os.path.exists(load_path):

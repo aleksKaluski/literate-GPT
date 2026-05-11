@@ -78,3 +78,4 @@ def process_conversational_dataset(df: pd.DataFrame, column: str) -> list[str]:
     return text
 
 
+# print(process_classical_txt(r'/home/akaluski/Data/pretrain_james/brief_psych.txt', 121, 400))

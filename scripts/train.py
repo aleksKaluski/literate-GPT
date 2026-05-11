@@ -3,8 +3,6 @@ This script trains the model and make an output with timestamps.
 It also saves instances of the model while training.
 """
 
-from src import model as md
-from src import preprocessing as pp
 import os
 import torch
 import tiktoken
@@ -12,8 +10,9 @@ import pandas as pd
 import json
 from pathlib import Path
 from datetime import datetime
+from src.model import GPTLanguageModel, get_batch, estimate_loss
 from src.conversation import ConversationHistory
-from src.preprocessing import clean, get_chat_tokenizer
+from src.preprocessing import clean, get_chat_tokenizer, process_conversational_dataset, process_classical_txt
 
 parent_dir = Path(__file__).resolve().parent.parent
 os.chdir(parent_dir)
@@ -22,11 +21,22 @@ print(f"Current working directory: {os.getcwd()}")
 #########################################################################################
 # load the data
 # text = dp.clean_text(path_to_file=r'data/mock_data.txt')
-df_full = pd.read_parquet("hf://datasets/ruggsea/stanford-encyclopedia-of-philosophy_chat_multi_turn/data/train-00000-of-00001.parquet")
-df_full = df_full.head(300)
+# df_full = pd.read_parquet("hf://datasets/ruggsea/stanford-encyclopedia-of-philosophy_chat_multi_turn/data/train-00000-of-00001.parquet")
+# df_full = df_full.head(300)
+# text = process_conversational_dataset(df_full, column="conversation")
 
+corpus_path = "/home/akaluski/Data/pretrain_james"
+parts = []
+for file in sorted(os.listdir(corpus_path)):
+    print(f"loaded: {file}")
+    if not file.endswith(".txt"):
+        continue
 
-text = pp.process_conversational_dataset(df_full, column="conversation")
+    file_path = Path(corpus_path) / file
+    text_chunk = process_classical_txt(str(file_path), 250, 800)
+    parts.append(text_chunk)
+
+text = "\n\n".join(parts)
 tokenizer = get_chat_tokenizer()
 
 # add conversational tokens
@@ -79,19 +89,30 @@ metadata = open("data/metadata.txt", 'w',  encoding='utf-8')
 metadata.write(f"{'Dataset Metrics':-^30}\n")
 metadata.write(f"Train Length: {len(train_data)}\n")
 metadata.write(f"Val Length:   {len(test_data)}\n")
-metadata.write(f"Block Size:   {params['batch_size']}\n")
+metadata.write(f"Block Size:   {params['block_size']}\n")
 metadata.write(f"\n{'Model Hyperparameters':-^30}\n")
-metadata.write(f"Vocab Size:\t{params['n_embed']}\n")
+metadata.write(f"Vocab Size:\t{params['vocab_size']}\n")
 metadata.write(f"Embed Dim:\t{params['n_embed']}\n")
-metadata.write(f"Head Size:\t{params['n_heads']}\n")
 metadata.write(f"Head Size:\t{params['n_heads']}\n")
 metadata.write(f"Device:\t{params['device']}\n")
 metadata.write(f"checkpoint_interval:\t{params['checkpoint_interval']}\n\n")
 
 #########################################################################################
 # initialize model
-model = md.GPTLanguageModel(**params)
+model = GPTLanguageModel(**params)
 m = model.to(device)
+
+# you may fine-tune or initialize a new instance
+# checkpoint_path = "models/william_james_16-25-31_11_05_2026.pt"
+checkpoint_path = None
+
+if checkpoint_path and os.path.isfile(checkpoint_path):
+    print(f"Loading model weights from: {checkpoint_path}")
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    print("Model loaded, continuing training (fine-tuning)")
+else:
+    print("No checkpoint provided or file not found. Initializing new model.")
+
 
 print(f"\n{'Model':-^30}")
 print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
@@ -109,7 +130,7 @@ for iter in range(params['max_iters']):
 
     # every once in a while evaluate the loss on train and val sets
     if iter % params['eval_interval'] == 0:
-        losses = md.estimate_loss(model=model,
+        losses = estimate_loss(model=model,
                                   train_data=train_data,
                                   test_data=test_data,
                                   **params)
@@ -135,7 +156,7 @@ for iter in range(params['max_iters']):
         metadata.write("-" * 30 + "\n")
 
     # sample a batch of data
-    xb, yb = md.get_batch(split='train',
+    xb, yb = get_batch(split='train',
                           train_data=train_data,
                           test_data=test_data,
                           **params)

@@ -1,36 +1,17 @@
 -------Dataset Metrics--------
-Train Length: 162836
-Val Length:   18093
+Train Length: 1798582
+Val Length:   199843
 Block Size:   8
 
 ----Model Hyperparameters-----
-Vocab Size:	4
-Embed Dim:	4
-Head Size:	2
+Vocab Size:	50261
+Embed Dim:	8
 Head Size:	2
 Device:	cpu
-checkpoint_interval:	200
+checkpoint_interval:	10
 
-Model: william_james_16-40-23_10_05_2026
-Number of steps:200
-Last train loss 10.1616
-Last val loss 10.1802
-------------------------------
-Model: william_james_16-40-32_10_05_2026
-Number of steps:400
-Last train loss 7.8873
-Last val loss 7.9938
-------------------------------
-Model: william_james_16-40-39_10_05_2026
-Number of steps:600
-Last train loss 7.3249
-Last val loss 7.4163
-------------------------------
-Model: william_james_16-40-45_10_05_2026
-Number of steps:800
-Last train loss 7.2280
-Last val loss 7.3350
-------------------------------
-Model: william_james_16-40-48_10_05_2026
-Number of steps:1000
+Model: william_james_16-26-00_11_05_2026
+Number of steps:10
+Last train loss 16.2146
+Last val loss 15.9547
 ------------------------------

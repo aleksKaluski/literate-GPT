@@ -2,11 +2,11 @@
 A script that loads the model and then enables us to talk with it.
 """
 
-from src import model as md
 import os
 import torch
 from src.conversation import ConversationHistory
 from src.preprocessing import clean, get_chat_tokenizer
+from src.model import GPTLanguageModel
 import json
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -25,7 +25,7 @@ device = params['device']
 tokenizer = get_chat_tokenizer()
 
 # initialize model
-model = md.GPTLanguageModel(**params)
+model = GPTLanguageModel(**params)
 load_path = "models/william_james_16-15-30_11_05_2026.pt"
 
 # load and inject the weights into the model

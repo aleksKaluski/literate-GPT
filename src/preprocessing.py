@@ -52,7 +52,7 @@ def clean(text: str) -> str:
     """
     Clean text and return a single string.
     """
-    cleaned = re.sub(r'[^a-zA-Z0-9 .,:()?!]', '', text)
+    cleaned = re.sub(r'[^a-zA-Z .,:?!]', '', text)
     return "".join(cleaned)
 
 
@@ -76,6 +76,3 @@ def process_conversational_dataset(df: pd.DataFrame, column: str) -> list[str]:
         conversation += "<|endoftext|>" + '\n'
         text += conversation
     return text
-
-
-# print(process_classical_txt(r'/home/akaluski/Data/pretrain_james/brief_psych.txt', 121, 400))

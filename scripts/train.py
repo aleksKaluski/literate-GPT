@@ -1,6 +1,7 @@
 """
 This script trains the model and make an output with timestamps.
-It also saves instances of the model while training.
+It also saves instances of the model while training and fine-tuning of models by providing their
+paths.
 """
 
 import os
@@ -59,7 +60,7 @@ assert len(test_data) != 0
 #########################################################################################
 # define key params
 torch.manual_seed(42)
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # load the params
 with open("data/cfg.json", "r", encoding="utf-8") as f:
@@ -100,7 +101,7 @@ metadata.write(f"checkpoint_interval:\t{params['checkpoint_interval']}\n\n")
 #########################################################################################
 # initialize model
 model = GPTLanguageModel(**params)
-m = model.to(device)
+m = model.to(params['device'])
 
 # you may fine-tune or initialize a new instance
 # checkpoint_path = "models/william_james_16-25-31_11_05_2026.pt"
@@ -108,7 +109,7 @@ checkpoint_path = None
 
 if checkpoint_path and os.path.isfile(checkpoint_path):
     print(f"Loading model weights from: {checkpoint_path}")
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.load_state_dict(torch.load(checkpoint_path, map_location=params['device']))
     print("Model loaded, continuing training (fine-tuning)")
 else:
     print("No checkpoint provided or file not found. Initializing new model.")
